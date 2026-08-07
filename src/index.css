@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* Custom background/theme helpers if needed */
+body {
+  @apply bg-gray-50 text-gray-900 antialiased min-h-screen;
+}
