@@ -1,21 +1,36 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Intentar leer de las variables de entorno, o de lo contrario de localStorage si se configuraron dinámicamente
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('temp_supabase_url') || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || localStorage.getItem('temp_supabase_key') || '';
+// Verificar si una cadena es un valor vacío o una clave dummy por defecto
+const isPlaceholder = (val: string | undefined): boolean => {
+  if (!val) return true;
+  const lower = val.toLowerCase();
+  return (
+    lower === 'https://your-supabase-url.supabase.co' ||
+    lower === 'https://tu-proyecto.supabase.co' ||
+    lower === 'your-supabase-anon-key' ||
+    lower === 'tu-anon-key-de-supabase' ||
+    lower.trim() === ''
+  );
+};
 
-// Verificar si las credenciales son válidas y no son los placeholders por defecto
-export const isSupabaseConfigured =
-  Boolean(supabaseUrl) &&
-  supabaseUrl !== 'https://your-supabase-url.supabase.co' &&
-  supabaseUrl !== 'https://tu-proyecto.supabase.co' &&
-  Boolean(supabaseAnonKey) &&
-  supabaseAnonKey !== 'your-supabase-anon-key' &&
-  supabaseAnonKey !== 'tu-anon-key-de-supabase';
+// Resolver las claves prioritarias: variables de entorno reales primero, luego localStorage
+const envUrl = import.meta.env.VITE_SUPABASE_URL;
+const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const finalUrl = !isPlaceholder(envUrl)
+  ? (envUrl || '')
+  : (localStorage.getItem('temp_supabase_url') || '');
+
+const finalKey = !isPlaceholder(envKey)
+  ? (envKey || '')
+  : (localStorage.getItem('temp_supabase_key') || '');
+
+// Exportar la bandera de si la app está correctamente configurada
+export const isSupabaseConfigured = !isPlaceholder(finalUrl) && !isPlaceholder(finalKey);
 
 // Usar credenciales seguras o un fallback válido temporal para evitar errores fatales durante la importación inicial
-const activeUrl = isSupabaseConfigured ? supabaseUrl : 'https://placeholder-project.supabase.co';
-const activeKey = isSupabaseConfigured ? supabaseAnonKey : 'placeholder-anon-key';
+const activeUrl = isSupabaseConfigured ? finalUrl : 'https://placeholder-project.supabase.co';
+const activeKey = isSupabaseConfigured ? finalKey : 'placeholder-anon-key';
 
 export const supabase = createClient(activeUrl, activeKey, {
   auth: {
