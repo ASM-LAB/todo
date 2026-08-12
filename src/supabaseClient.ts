@@ -13,24 +13,28 @@ const isPlaceholder = (val: string | undefined): boolean => {
   );
 };
 
-// Resolver las claves prioritarias: variables de entorno reales primero, luego localStorage
+// Credenciales de Supabase permanentes provistas por el usuario
+const defaultUrl = 'https://izqubzbaiuknewrnbrsl.supabase.co';
+const defaultKey = 'sb_publishable_3-aRTioL3jsIjARu_WRmQQ_FUt_8JAi';
+
+// Resolver las claves prioritarias: variables de entorno reales primero, luego localStorage, y finalmente las credenciales por defecto
 const envUrl = import.meta.env.VITE_SUPABASE_URL;
 const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const finalUrl = !isPlaceholder(envUrl)
   ? (envUrl || '')
-  : (localStorage.getItem('temp_supabase_url') || '');
+  : (localStorage.getItem('temp_supabase_url') || defaultUrl);
 
 const finalKey = !isPlaceholder(envKey)
   ? (envKey || '')
-  : (localStorage.getItem('temp_supabase_key') || '');
+  : (localStorage.getItem('temp_supabase_key') || defaultKey);
 
 // Exportar la bandera de si la app está correctamente configurada
 export const isSupabaseConfigured = !isPlaceholder(finalUrl) && !isPlaceholder(finalKey);
 
-// Usar credenciales seguras o un fallback válido temporal para evitar errores fatales durante la importación inicial
-const activeUrl = isSupabaseConfigured ? finalUrl : 'https://placeholder-project.supabase.co';
-const activeKey = isSupabaseConfigured ? finalKey : 'placeholder-anon-key';
+// Usar las credenciales activas resueltas
+const activeUrl = finalUrl;
+const activeKey = finalKey;
 
 export const supabase = createClient(activeUrl, activeKey, {
   auth: {
