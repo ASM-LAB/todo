@@ -29,6 +29,7 @@ import {
 interface Tarea {
   id: string;
   user_id: string;
+  titulo: string;
   concepto: string;
   concepto_superior: string;
   prioridad: 'alta' | 'media' | 'baja';
@@ -73,6 +74,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTarea, setEditingTarea] = useState<Tarea | null>(null);
   const [formData, setFormData] = useState({
+    titulo: '',
     concepto: '',
     concepto_superior: '',
     prioridad: 'media' as 'alta' | 'media' | 'baja',
@@ -110,6 +112,12 @@ export default function App() {
       return;
     }
 
+    if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
+      setUser({ id: 'mock-user-id', email: 'developer@example.com' });
+      setAuthLoading(false);
+      return;
+    }
+
     // Obtener sesión inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -133,6 +141,42 @@ export default function App() {
     setLoadingTareas(true);
     setTareasError('');
     try {
+      if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
+        const localData = localStorage.getItem('mock_tareas');
+        if (localData) {
+          setTareas(JSON.parse(localData));
+        } else {
+          const initialMock: Tarea[] = [
+            {
+              id: '1',
+              user_id: 'mock-user-id',
+              titulo: 'Diseñar base de datos',
+              concepto: 'Crear tabla tareas con la nueva columna titulo para la sincronización',
+              concepto_superior: 'Trabajo',
+              prioridad: 'alta',
+              estado: 'pendiente',
+              fecha_alta: new Date().toISOString(),
+              fecha_resolucion: null
+            },
+            {
+              id: '2',
+              user_id: 'mock-user-id',
+              titulo: 'Comprar provisiones',
+              concepto: 'Comprar leche deslactosada, pan integral y huevos orgánicos',
+              concepto_superior: 'Hogar',
+              prioridad: 'media',
+              estado: 'en curso',
+              fecha_alta: new Date().toISOString(),
+              fecha_resolucion: null
+            }
+          ];
+          localStorage.setItem('mock_tareas', JSON.stringify(initialMock));
+          setTareas(initialMock);
+        }
+        setLoadingTareas(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('tareas')
         .select('*');
@@ -158,6 +202,10 @@ export default function App() {
   // Suscripción en Tiempo Real (Supabase Realtime)
   useEffect(() => {
     if (!user || !isConfigured) return;
+
+    if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
+      return;
+    }
 
     // Suscribirse a cambios en la tabla 'tareas' para el esquema 'public'
     const channel = supabase
@@ -257,7 +305,7 @@ export default function App() {
   // Guardar / Actualizar Tarea
   const handleSaveTarea = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.concepto.trim() || !formData.concepto_superior.trim()) {
+    if (!formData.titulo.trim() || !formData.concepto.trim() || !formData.concepto_superior.trim()) {
       alert('Por favor, rellena todos los campos.');
       return;
     }
@@ -270,11 +318,53 @@ export default function App() {
           ? editingTarea.fecha_resolucion
           : null;
 
+      if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
+        const currentTareas = JSON.parse(localStorage.getItem('mock_tareas') || '[]');
+        if (editingTarea) {
+          const updated = currentTareas.map((t: any) => t.id === editingTarea.id ? {
+            ...t,
+            titulo: formData.titulo.trim(),
+            concepto: formData.concepto.trim(),
+            concepto_superior: formData.concepto_superior.trim(),
+            prioridad: formData.prioridad,
+            estado: formData.estado,
+            fecha_resolucion: fechaResolucion,
+          } : t);
+          localStorage.setItem('mock_tareas', JSON.stringify(updated));
+        } else {
+          const nueva: Tarea = {
+            id: Math.random().toString(),
+            user_id: 'mock-user-id',
+            titulo: formData.titulo.trim(),
+            concepto: formData.concepto.trim(),
+            concepto_superior: formData.concepto_superior.trim(),
+            prioridad: formData.prioridad,
+            estado: formData.estado,
+            fecha_alta: new Date().toISOString(),
+            fecha_resolucion: fechaResolucion,
+          };
+          currentTareas.push(nueva);
+          localStorage.setItem('mock_tareas', JSON.stringify(currentTareas));
+        }
+        setIsModalOpen(false);
+        setEditingTarea(null);
+        setFormData({
+          titulo: '',
+          concepto: '',
+          concepto_superior: '',
+          prioridad: 'media',
+          estado: 'pendiente',
+        });
+        fetchTareas();
+        return;
+      }
+
       if (editingTarea) {
         // Modo Edición
         const { error } = await supabase
           .from('tareas')
           .update({
+            titulo: formData.titulo.trim(),
             concepto: formData.concepto.trim(),
             concepto_superior: formData.concepto_superior.trim(),
             prioridad: formData.prioridad,
@@ -289,6 +379,7 @@ export default function App() {
         const { error } = await supabase
           .from('tareas')
           .insert({
+            titulo: formData.titulo.trim(),
             concepto: formData.concepto.trim(),
             concepto_superior: formData.concepto_superior.trim(),
             prioridad: formData.prioridad,
@@ -303,6 +394,7 @@ export default function App() {
       setIsModalOpen(false);
       setEditingTarea(null);
       setFormData({
+        titulo: '',
         concepto: '',
         concepto_superior: '',
         prioridad: 'media',
@@ -318,6 +410,14 @@ export default function App() {
   const handleDeleteTarea = async (id: string) => {
     if (!confirm('¿Estás seguro de que deseas eliminar esta tarea?')) return;
     try {
+      if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
+        const currentTareas = JSON.parse(localStorage.getItem('mock_tareas') || '[]');
+        const filtered = currentTareas.filter((t: any) => t.id !== id);
+        localStorage.setItem('mock_tareas', JSON.stringify(filtered));
+        fetchTareas();
+        return;
+      }
+
       const { error } = await supabase
         .from('tareas')
         .delete()
@@ -335,6 +435,18 @@ export default function App() {
     try {
       const isResuelta = nuevoEstado === 'resuelta';
       const fechaResolucion = isResuelta ? new Date().toISOString() : null;
+
+      if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
+        const currentTareas = JSON.parse(localStorage.getItem('mock_tareas') || '[]');
+        const updated = currentTareas.map((t: any) => t.id === tarea.id ? {
+          ...t,
+          estado: nuevoEstado,
+          fecha_resolucion: fechaResolucion
+        } : t);
+        localStorage.setItem('mock_tareas', JSON.stringify(updated));
+        fetchTareas();
+        return;
+      }
 
       const { error } = await supabase
         .from('tareas')
@@ -355,6 +467,7 @@ export default function App() {
   const openCreateModal = () => {
     setEditingTarea(null);
     setFormData({
+      titulo: '',
       concepto: '',
       concepto_superior: '',
       prioridad: 'media',
@@ -367,6 +480,7 @@ export default function App() {
   const openEditModal = (tarea: Tarea) => {
     setEditingTarea(tarea);
     setFormData({
+      titulo: tarea.titulo || '',
       concepto: tarea.concepto,
       concepto_superior: tarea.concepto_superior,
       prioridad: tarea.prioridad,
@@ -384,11 +498,12 @@ export default function App() {
       resultado = resultado.filter((t) => t.estado === filtroEstado);
     }
 
-    // 2. Búsqueda por Concepto o Concepto Superior (Grupo)
+    // 2. Búsqueda por Título, Concepto o Concepto Superior (Grupo)
     if (busqueda.trim() !== '') {
       const term = busqueda.toLowerCase();
       resultado = resultado.filter(
         (t) =>
+          (t.titulo && t.titulo.toLowerCase().includes(term)) ||
           t.concepto.toLowerCase().includes(term) ||
           t.concepto_superior.toLowerCase().includes(term)
       );
@@ -905,11 +1020,18 @@ export default function App() {
                                 </span>
                               </div>
 
-                              <p className={`text-sm sm:text-base text-gray-800 font-medium break-words leading-relaxed text-left ${
-                                tarea.estado === 'resuelta' ? 'line-through text-gray-400' : ''
-                              }`}>
-                                {tarea.concepto}
-                              </p>
+                              <div className="space-y-1">
+                                <h4 className={`text-base sm:text-lg text-gray-900 font-bold break-words leading-snug text-left ${
+                                  tarea.estado === 'resuelta' ? 'line-through text-gray-400 font-semibold' : ''
+                                }`}>
+                                  {tarea.titulo || 'Sin título'}
+                                </h4>
+                                <p className={`text-xs sm:text-sm text-gray-500 break-words leading-relaxed text-left ${
+                                  tarea.estado === 'resuelta' ? 'line-through text-gray-400/80' : ''
+                                }`}>
+                                  {tarea.concepto}
+                                </p>
+                              </div>
 
                               {/* Fechas */}
                               <div className="flex items-center gap-4 text-xs text-gray-400 flex-wrap">
@@ -1002,6 +1124,21 @@ export default function App() {
                   placeholder="Ej: Trabajo, Personal, Hogar, Compras"
                   value={formData.concepto_superior}
                   onChange={(e) => setFormData({ ...formData, concepto_superior: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm"
+                  required
+                />
+              </div>
+
+              {/* Título de Tarea */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
+                  Título de Tarea
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Reunión de equipo, Comprar leche, Arreglar grifo"
+                  value={formData.titulo}
+                  onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm"
                   required
                 />
