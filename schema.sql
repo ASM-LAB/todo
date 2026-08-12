@@ -7,6 +7,7 @@
 CREATE TABLE IF NOT EXISTS public.tareas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    titulo TEXT NOT NULL DEFAULT 'Sin título',
     concepto TEXT NOT NULL,
     concepto_superior TEXT NOT NULL,
     prioridad TEXT NOT NULL CHECK (prioridad IN ('alta', 'media', 'baja')),
@@ -14,6 +15,9 @@ CREATE TABLE IF NOT EXISTS public.tareas (
     fecha_alta TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     fecha_resolucion TIMESTAMPTZ
 );
+
+-- NOTA DE MIGRACIÓN: Para bases de datos que ya existen, se puede ejecutar la siguiente consulta en el Editor SQL de Supabase:
+-- ALTER TABLE public.tareas ADD COLUMN IF NOT EXISTS titulo TEXT NOT NULL DEFAULT 'Sin título';
 
 -- Indexar para mejorar el rendimiento de consultas por usuario
 CREATE INDEX IF NOT EXISTS tareas_user_id_idx ON public.tareas(user_id);
