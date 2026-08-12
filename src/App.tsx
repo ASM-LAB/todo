@@ -36,6 +36,7 @@ interface Tarea {
   estado: 'pendiente' | 'en curso' | 'rechazada' | 'resuelta';
   fecha_alta: string;
   fecha_resolucion: string | null;
+  fecha_limite?: string | null;
 }
 
 // Mapeo de prioridad a valor numérico para ordenación (Alta -> 1, Media -> 2, Baja -> 3)
@@ -67,6 +68,7 @@ export default function App() {
 
   // Estados de Filtros y Búsqueda
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
+  const [filtroPlazo, setFiltroPlazo] = useState<string>('todos'); // 'todos' | 'fuera_plazo' | 'cercano_plazo'
   const [busqueda, setBusqueda] = useState('');
   const [accordionsAbiertos, setAccordionsAbiertos] = useState<Record<string, boolean>>({});
 
@@ -79,6 +81,7 @@ export default function App() {
     concepto_superior: '',
     prioridad: 'media' as 'alta' | 'media' | 'baja',
     estado: 'pendiente' as 'pendiente' | 'en curso' | 'rechazada' | 'resuelta',
+    fecha_limite: '',
   });
 
   // Intentar guardar credenciales ingresadas temporalmente si faltan
@@ -318,6 +321,8 @@ export default function App() {
           ? editingTarea.fecha_resolucion
           : null;
 
+      const fechaLimiteVal = formData.fecha_limite.trim() || null;
+
       if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
         const currentTareas = JSON.parse(localStorage.getItem('mock_tareas') || '[]');
         if (editingTarea) {
@@ -329,6 +334,7 @@ export default function App() {
             prioridad: formData.prioridad,
             estado: formData.estado,
             fecha_resolucion: fechaResolucion,
+            fecha_limite: fechaLimiteVal,
           } : t);
           localStorage.setItem('mock_tareas', JSON.stringify(updated));
         } else {
@@ -342,6 +348,7 @@ export default function App() {
             estado: formData.estado,
             fecha_alta: new Date().toISOString(),
             fecha_resolucion: fechaResolucion,
+            fecha_limite: fechaLimiteVal,
           };
           currentTareas.push(nueva);
           localStorage.setItem('mock_tareas', JSON.stringify(currentTareas));
@@ -354,6 +361,7 @@ export default function App() {
           concepto_superior: '',
           prioridad: 'media',
           estado: 'pendiente',
+          fecha_limite: '',
         });
         fetchTareas();
         return;
@@ -370,6 +378,7 @@ export default function App() {
             prioridad: formData.prioridad,
             estado: formData.estado,
             fecha_resolucion: fechaResolucion,
+            fecha_limite: fechaLimiteVal,
           })
           .eq('id', editingTarea.id);
 
@@ -385,6 +394,7 @@ export default function App() {
             prioridad: formData.prioridad,
             estado: formData.estado,
             fecha_resolucion: fechaResolucion,
+            fecha_limite: fechaLimiteVal,
           });
 
         if (error) throw error;
@@ -399,6 +409,7 @@ export default function App() {
         concepto_superior: '',
         prioridad: 'media',
         estado: 'pendiente',
+        fecha_limite: '',
       });
       fetchTareas(); // Sincronización fallback por si falla realtime
     } catch (err: any) {
@@ -472,6 +483,7 @@ export default function App() {
       concepto_superior: '',
       prioridad: 'media',
       estado: 'pendiente',
+      fecha_limite: '',
     });
     setIsModalOpen(true);
   };
@@ -485,6 +497,7 @@ export default function App() {
       concepto_superior: tarea.concepto_superior,
       prioridad: tarea.prioridad,
       estado: tarea.estado,
+      fecha_limite: tarea.fecha_limite || '',
     });
     setIsModalOpen(true);
   };
@@ -498,18 +511,49 @@ export default function App() {
       resultado = resultado.filter((t) => t.estado === filtroEstado);
     }
 
-    // 2. Búsqueda por Título, Concepto o Concepto Superior (Grupo)
-    if (busqueda.trim() !== '') {
-      const term = busqueda.toLowerCase();
-      resultado = resultado.filter(
-        (t) =>
-          (t.titulo && t.titulo.toLowerCase().includes(term)) ||
-          t.concepto.toLowerCase().includes(term) ||
-          t.concepto_superior.toLowerCase().includes(term)
-      );
+    // 2. Filtrado por Plazo (Fuera de Plazo / Cercano)
+    if (filtroPlazo !== 'todos') {
+      resultado = resultado.filter((t) => {
+        const estadoPlazo = obtenerEstadoPlazo(t.fecha_limite, t.estado);
+        if (filtroPlazo === 'fuera_plazo') return estadoPlazo === 'rojo';
+        if (filtroPlazo === 'cercano_plazo') return estadoPlazo === 'amarillo';
+        return true;
+      });
     }
 
-    // 3. Ordenación por Prioridad (Alta > Media > Baja) y luego por Fecha de Alta (descendente)
+    // 3. Búsqueda por Título, Concepto, Grupo o estado de Plazo por texto
+    if (busqueda.trim() !== '') {
+      const term = busqueda.toLowerCase();
+      resultado = resultado.filter((t) => {
+        const matchesTexto =
+          (t.titulo && t.titulo.toLowerCase().includes(term)) ||
+          t.concepto.toLowerCase().includes(term) ||
+          t.concepto_superior.toLowerCase().includes(term);
+
+        if (matchesTexto) return true;
+
+        const estadoPlazo = obtenerEstadoPlazo(t.fecha_limite, t.estado);
+        // Coincidencias para "fuera de plazo", "vencido", "atrasado"
+        if (
+          (term.includes('fuera') || term.includes('vencid') || term.includes('atrasad') || term.includes('plazo superado')) &&
+          estadoPlazo === 'rojo'
+        ) {
+          return true;
+        }
+
+        // Coincidencias para "cercana", "por vencer", "proxima"
+        if (
+          (term.includes('cercan') || term.includes('vencer') || term.includes('proxim') || term.includes('próxim')) &&
+          estadoPlazo === 'amarillo'
+        ) {
+          return true;
+        }
+
+        return false;
+      });
+    }
+
+    // 4. Ordenación por Prioridad (Alta > Media > Baja) y luego por Fecha de Alta (descendente)
     resultado.sort((a, b) => {
       const prioridadDiff = PRIORIDAD_VALORES[a.prioridad] - PRIORIDAD_VALORES[b.prioridad];
       if (prioridadDiff !== 0) {
@@ -520,7 +564,7 @@ export default function App() {
     });
 
     return resultado;
-  }, [tareas, filtroEstado, busqueda]);
+  }, [tareas, filtroEstado, filtroPlazo, busqueda]);
 
   // Agrupación por Concepto Superior (para los acordeones colapsables)
   const tareasAgrupadas = useMemo(() => {
@@ -536,6 +580,17 @@ export default function App() {
 
     return grupos;
   }, [tareasProcesadas]);
+
+  // Obtener todos los Conceptos Superiores declarados anteriormente para autocompletar / sugerencias
+  const conceptosExistentes = useMemo(() => {
+    const set = new Set<string>();
+    tareas.forEach((t) => {
+      if (t.concepto_superior?.trim()) {
+        set.add(t.concepto_superior.trim());
+      }
+    });
+    return Array.from(set);
+  }, [tareas]);
 
   // Alternar estado de colapsado para un grupo
   const toggleAccordion = (grupo: string) => {
@@ -557,6 +612,42 @@ export default function App() {
     });
   };
 
+  // Obtener estado del plazo de una tarea (rojo: pasado, amarillo: <= 5 días, normal: de lo contrario)
+  const obtenerEstadoPlazo = (fechaLimiteStr: string | null | undefined, estado: string) => {
+    if (!fechaLimiteStr || estado === 'resuelta') return 'normal';
+
+    const limite = new Date(fechaLimiteStr);
+    limite.setHours(0, 0, 0, 0);
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const diffTime = limite.getTime() - hoy.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return 'rojo'; // Se ha pasado la fecha límite
+    } else if (diffDays <= 5) {
+      return 'amarillo'; // A 5 días o menos de la fecha límite
+    }
+    return 'normal';
+  };
+
+  // Formatear fecha límite (ej. YYYY-MM-DD a DD/MM/YYYY)
+  const formatFechaLimite = (fechaString: string | null | undefined) => {
+    if (!fechaString) return '';
+    const parts = fechaString.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const date = new Date(fechaString);
+    return date.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
   // Contadores para el panel de estadísticas en la parte superior
   const stats = useMemo(() => {
     const totales = tareas.length;
@@ -566,6 +657,18 @@ export default function App() {
     const resueltas = tareas.filter((t) => t.estado === 'resuelta').length;
     return { totales, pendientes, enCurso, rechazadas, resueltas };
   }, [tareas]);
+
+  // Contadores para filtros específicos de plazo
+  const statsPlazo = useMemo(() => {
+    let fueraPlazo = 0;
+    let cercanoPlazo = 0;
+    tareas.forEach((t) => {
+      const estadoPlazo = obtenerEstadoPlazo(t.fecha_limite, t.estado);
+      if (estadoPlazo === 'rojo') fueraPlazo++;
+      if (estadoPlazo === 'amarillo') cercanoPlazo++;
+    });
+    return { fueraPlazo, cercanoPlazo };
+  }, [tareas, obtenerEstadoPlazo]);
 
   // 1. Pantalla de advertencia si no está configurado Supabase
   if (!isConfigured) {
@@ -662,7 +765,7 @@ export default function App() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-purple-100 text-purple-600 mb-4">
               <CheckCircle2 size={36} />
             </div>
-            <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight m-0">To-Do Realtime</h2>
+            <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight m-0">Lista de Tareas</h2>
             <p className="text-sm text-gray-500 mt-2">Gestiona tus tareas en todos tus dispositivos de forma inmediata</p>
           </div>
 
@@ -793,7 +896,7 @@ export default function App() {
               <CheckCircle2 size={22} />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-gray-900 leading-none m-0 p-0 text-left">To-Do PWA</h1>
+              <h1 className="text-xl font-extrabold text-gray-900 leading-none m-0 p-0 text-left">Lista de Tareas</h1>
               <span className="text-[10px] text-green-500 font-bold tracking-wider uppercase flex items-center gap-1 mt-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                 Tiempo Real Activo
@@ -878,35 +981,70 @@ export default function App() {
           </button>
         </div>
 
-        {/* Filtros de Estado */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
-          <div className="p-1 bg-gray-200/60 rounded-xl flex items-center w-full sm:w-auto">
-            {[
-              { id: 'todos', label: 'Todos', count: stats.totales },
-              { id: 'pendiente', label: 'Pendientes', count: stats.pendientes },
-              { id: 'en curso', label: 'En Curso', count: stats.enCurso },
-              { id: 'rechazada', label: 'Rechazadas', count: stats.rechazadas },
-              { id: 'resuelta', label: 'Resueltas', count: stats.resueltas },
-            ].map((filtro) => (
-              <button
-                key={filtro.id}
-                onClick={() => setFiltroEstado(filtro.id)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                  filtroEstado === filtro.id
-                    ? 'bg-white text-gray-900 shadow-xs'
-                    : 'text-gray-500 hover:text-gray-900'
-                }`}
-              >
-                <span>{filtro.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${
-                  filtroEstado === filtro.id
-                    ? 'bg-purple-100 text-purple-700'
-                    : 'bg-gray-200 text-gray-600'
-                }`}>
-                  {filtro.count}
-                </span>
-              </button>
-            ))}
+        {/* Filtros de Estado y Plazo */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-xs">
+          {/* Filtros de Estado */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1 select-none">Estado:</span>
+            <div className="p-1 bg-gray-100 rounded-xl flex items-center">
+              {[
+                { id: 'todos', label: 'Todos', count: stats.totales },
+                { id: 'pendiente', label: 'Pendientes', count: stats.pendientes },
+                { id: 'en curso', label: 'En Curso', count: stats.enCurso },
+                { id: 'rechazada', label: 'Rechazadas', count: stats.rechazadas },
+                { id: 'resuelta', label: 'Resueltas', count: stats.resueltas },
+              ].map((filtro) => (
+                <button
+                  key={filtro.id}
+                  onClick={() => setFiltroEstado(filtro.id)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition shrink-0 flex items-center gap-1 cursor-pointer ${
+                    filtroEstado === filtro.id
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <span>{filtro.label}</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-md ${
+                    filtroEstado === filtro.id
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {filtro.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Filtros de Plazo */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1 select-none">Plazo:</span>
+            <div className="p-1 bg-gray-100 rounded-xl flex items-center">
+              {[
+                { id: 'todos', label: 'Todos', count: stats.totales },
+                { id: 'fuera_plazo', label: 'Fuera de Plazo', count: statsPlazo.fueraPlazo, badgeColor: 'bg-red-100 text-red-700' },
+                { id: 'cercano_plazo', label: 'Próximas', count: statsPlazo.cercanoPlazo, badgeColor: 'bg-amber-100 text-amber-700' },
+              ].map((filtro) => (
+                <button
+                  key={filtro.id}
+                  onClick={() => setFiltroPlazo(filtro.id)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition shrink-0 flex items-center gap-1 cursor-pointer ${
+                    filtroPlazo === filtro.id
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <span>{filtro.label}</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-md ${
+                    filtroPlazo === filtro.id
+                      ? (filtro.badgeColor || 'bg-purple-100 text-purple-700')
+                      : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {filtro.count}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1004,10 +1142,18 @@ export default function App() {
                           resuelta: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
                         }[tarea.estado];
 
+                        const estadoPlazo = obtenerEstadoPlazo(tarea.fecha_limite, tarea.estado);
+                        let plazoClasses = '';
+                        if (estadoPlazo === 'rojo') {
+                          plazoClasses = 'border-l-4 border-l-rose-500 bg-rose-50/15 hover:bg-rose-50/25';
+                        } else if (estadoPlazo === 'amarillo') {
+                          plazoClasses = 'border-l-4 border-l-amber-500 bg-amber-50/15 hover:bg-amber-50/25';
+                        }
+
                         return (
                           <div
                             key={tarea.id}
-                            className="p-4 sm:p-5 hover:bg-slate-50/40 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                            className={`p-4 sm:p-5 hover:bg-slate-50/40 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${plazoClasses}`}
                           >
                             {/* Información de la Tarea */}
                             <div className="space-y-2 flex-1 min-w-0">
@@ -1018,6 +1164,16 @@ export default function App() {
                                 <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${badgeEstado}`}>
                                   {tarea.estado}
                                 </span>
+                                {estadoPlazo === 'rojo' && (
+                                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-red-600 text-white animate-pulse">
+                                    Fuera de Plazo
+                                  </span>
+                                )}
+                                {estadoPlazo === 'amarillo' && (
+                                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white">
+                                    Próximo a Vencer
+                                  </span>
+                                )}
                               </div>
 
                               <div className="space-y-1">
@@ -1039,6 +1195,18 @@ export default function App() {
                                   <Calendar size={12} />
                                   Alta: {formatFecha(tarea.fecha_alta)}
                                 </span>
+                                {tarea.fecha_limite && (
+                                  <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold ${
+                                    estadoPlazo === 'rojo'
+                                      ? 'text-red-700 bg-red-100 border border-red-200'
+                                      : estadoPlazo === 'amarillo'
+                                        ? 'text-amber-800 bg-amber-100 border border-amber-200'
+                                        : 'text-gray-600 bg-gray-100 border border-gray-200'
+                                  }`}>
+                                    <Calendar size={12} />
+                                    Límite: {formatFechaLimite(tarea.fecha_limite)}
+                                  </span>
+                                )}
                                 {tarea.estado === 'resuelta' && tarea.fecha_resolucion && (
                                   <span className="flex items-center gap-1 text-emerald-600 bg-emerald-50/50 px-1.5 py-0.5 rounded">
                                     <CheckCircle2 size={12} />
@@ -1121,12 +1289,18 @@ export default function App() {
                 </label>
                 <input
                   type="text"
+                  list="conceptos-existentes"
                   placeholder="Ej: Trabajo, Personal, Hogar, Compras"
                   value={formData.concepto_superior}
                   onChange={(e) => setFormData({ ...formData, concepto_superior: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm bg-white"
                   required
                 />
+                <datalist id="conceptos-existentes">
+                  {conceptosExistentes.map((grupo) => (
+                    <option key={grupo} value={grupo} />
+                  ))}
+                </datalist>
               </div>
 
               {/* Título de Tarea */}
@@ -1156,6 +1330,19 @@ export default function App() {
                   rows={3}
                   className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm"
                   required
+                />
+              </div>
+
+              {/* Fecha Límite */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
+                  Fecha Límite (Opcional)
+                </label>
+                <input
+                  type="date"
+                  value={formData.fecha_limite}
+                  onChange={(e) => setFormData({ ...formData, fecha_limite: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm bg-white"
                 />
               </div>
 
@@ -1219,7 +1406,7 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-6 mt-12 text-center text-xs text-gray-400">
         <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© 2026 To-Do Realtime PWA. Todos los derechos reservados.</p>
+          <p>© 2026 Lista de Tareas Realtime PWA. Todos los derechos reservados.</p>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
               <Monitor size={12} /> PC compatible
