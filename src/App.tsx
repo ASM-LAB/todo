@@ -46,6 +46,27 @@ const PRIORIDAD_VALORES = {
   baja: 3,
 };
 
+// Obtener estado del plazo de una tarea (rojo: pasado, amarillo: <= 5 días, normal: de lo contrario)
+const obtenerEstadoPlazo = (fechaLimiteStr: string | null | undefined, estado: string) => {
+  if (!fechaLimiteStr || estado === 'resuelta') return 'normal';
+
+  const limite = new Date(fechaLimiteStr);
+  limite.setHours(0, 0, 0, 0);
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  const diffTime = limite.getTime() - hoy.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return 'rojo'; // Se ha pasado la fecha límite
+  } else if (diffDays <= 5) {
+    return 'amarillo'; // A 5 días o menos de la fecha límite
+  }
+  return 'normal';
+};
+
 export default function App() {
   // Configuración de Supabase (con posibilidad de configuración en vivo)
   const [isConfigured, setIsConfigured] = useState(initialIsConfigured);
@@ -69,6 +90,7 @@ export default function App() {
   // Estados de Filtros y Búsqueda
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [filtroPlazo, setFiltroPlazo] = useState<string>('todos'); // 'todos' | 'fuera_plazo' | 'cercano_plazo'
+  const [textoBusqueda, setTextoBusqueda] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [accordionsAbiertos, setAccordionsAbiertos] = useState<Record<string, boolean>>({});
 
@@ -308,8 +330,8 @@ export default function App() {
   // Guardar / Actualizar Tarea
   const handleSaveTarea = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.titulo.trim() || !formData.concepto.trim() || !formData.concepto_superior.trim()) {
-      alert('Por favor, rellena todos los campos.');
+    if (!formData.titulo.trim() || !formData.concepto_superior.trim()) {
+      alert('Por favor, rellena el título de la tarea y el grupo.');
       return;
     }
 
@@ -322,6 +344,7 @@ export default function App() {
           : null;
 
       const fechaLimiteVal = formData.fecha_limite.trim() || null;
+      const conceptoVal = formData.concepto.trim();
 
       if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
         const currentTareas = JSON.parse(localStorage.getItem('mock_tareas') || '[]');
@@ -329,7 +352,7 @@ export default function App() {
           const updated = currentTareas.map((t: any) => t.id === editingTarea.id ? {
             ...t,
             titulo: formData.titulo.trim(),
-            concepto: formData.concepto.trim(),
+            concepto: conceptoVal,
             concepto_superior: formData.concepto_superior.trim(),
             prioridad: formData.prioridad,
             estado: formData.estado,
@@ -342,7 +365,7 @@ export default function App() {
             id: Math.random().toString(),
             user_id: 'mock-user-id',
             titulo: formData.titulo.trim(),
-            concepto: formData.concepto.trim(),
+            concepto: conceptoVal,
             concepto_superior: formData.concepto_superior.trim(),
             prioridad: formData.prioridad,
             estado: formData.estado,
@@ -373,7 +396,7 @@ export default function App() {
           .from('tareas')
           .update({
             titulo: formData.titulo.trim(),
-            concepto: formData.concepto.trim(),
+            concepto: conceptoVal,
             concepto_superior: formData.concepto_superior.trim(),
             prioridad: formData.prioridad,
             estado: formData.estado,
@@ -389,7 +412,7 @@ export default function App() {
           .from('tareas')
           .insert({
             titulo: formData.titulo.trim(),
-            concepto: formData.concepto.trim(),
+            concepto: conceptoVal,
             concepto_superior: formData.concepto_superior.trim(),
             prioridad: formData.prioridad,
             estado: formData.estado,
@@ -471,6 +494,18 @@ export default function App() {
       fetchTareas(); // Sincronización fallback
     } catch (err: any) {
       alert('Error al actualizar el estado: ' + err.message);
+    }
+  };
+
+  // Manejar el envío de la búsqueda manual
+  const handleBuscar = () => {
+    setBusqueda(textoBusqueda);
+  };
+
+  // Manejar presionar la tecla Enter en la búsqueda
+  const handleKeyDownBusqueda = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleBuscar();
     }
   };
 
@@ -612,26 +647,6 @@ export default function App() {
     });
   };
 
-  // Obtener estado del plazo de una tarea (rojo: pasado, amarillo: <= 5 días, normal: de lo contrario)
-  const obtenerEstadoPlazo = (fechaLimiteStr: string | null | undefined, estado: string) => {
-    if (!fechaLimiteStr || estado === 'resuelta') return 'normal';
-
-    const limite = new Date(fechaLimiteStr);
-    limite.setHours(0, 0, 0, 0);
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    const diffTime = limite.getTime() - hoy.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      return 'rojo'; // Se ha pasado la fecha límite
-    } else if (diffDays <= 5) {
-      return 'amarillo'; // A 5 días o menos de la fecha límite
-    }
-    return 'normal';
-  };
 
   // Formatear fecha límite (ej. YYYY-MM-DD a DD/MM/YYYY)
   const formatFechaLimite = (fechaString: string | null | undefined) => {
@@ -952,23 +967,37 @@ export default function App() {
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
 
           {/* Búsqueda */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Buscar tarea o grupo..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm"
-            />
-            {busqueda && (
-              <button
-                onClick={() => setBusqueda('')}
-                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-              >
-                <X size={16} />
-              </button>
-            )}
+          <div className="flex-1 max-w-lg flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Buscar tarea o grupo..."
+                value={textoBusqueda}
+                onChange={(e) => setTextoBusqueda(e.target.value)}
+                onKeyDown={handleKeyDownBusqueda}
+                className="w-full pl-10 pr-10 py-2 bg-gray-50 border border-gray-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm"
+              />
+              {textoBusqueda && (
+                <button
+                  onClick={() => {
+                    setTextoBusqueda('');
+                    setBusqueda('');
+                  }}
+                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="Limpiar búsqueda"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleBuscar}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-xl transition duration-150 flex items-center justify-center gap-1.5 text-sm shadow-sm cursor-pointer shrink-0"
+            >
+              <Search size={16} />
+              <span>Buscar</span>
+            </button>
           </div>
 
           {/* Botón Nueva Tarea */}
@@ -1182,11 +1211,13 @@ export default function App() {
                                 }`}>
                                   {tarea.titulo || 'Sin título'}
                                 </h4>
-                                <p className={`text-xs sm:text-sm text-gray-500 break-words leading-relaxed text-left ${
-                                  tarea.estado === 'resuelta' ? 'line-through text-gray-400/80' : ''
-                                }`}>
-                                  {tarea.concepto}
-                                </p>
+                                {tarea.concepto && tarea.concepto.trim() && (
+                                  <p className={`text-xs sm:text-sm text-gray-500 break-words leading-relaxed text-left ${
+                                    tarea.estado === 'resuelta' ? 'line-through text-gray-400/80' : ''
+                                  }`}>
+                                    {tarea.concepto}
+                                  </p>
+                                )}
                               </div>
 
                               {/* Fechas */}
@@ -1321,15 +1352,14 @@ export default function App() {
               {/* Concepto / Tarea */}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
-                  Descripción de la Tarea (Concepto)
+                  Descripción de la Tarea (Concepto) (Opcional)
                 </label>
                 <textarea
                   placeholder="¿Qué tienes que hacer?"
                   value={formData.concepto}
                   onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm"
-                  required
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-hidden text-sm bg-white"
                 />
               </div>
 
