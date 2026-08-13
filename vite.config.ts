@@ -16,8 +16,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
       },
       manifest: {
-        name: 'Supabase To-Do List PWA',
-        short_name: 'TodoSupabase',
+        name: 'Lista Tareas',
+        short_name: 'Lista Tareas',
         description: 'Aplicación de Lista de Tareas (To-Do) en Tiempo Real con Supabase',
         theme_color: '#4f46e5',
         background_color: '#ffffff',
