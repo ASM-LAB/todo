@@ -138,7 +138,7 @@ export default function App() {
     }
 
     if (localStorage.getItem('temp_supabase_url')?.includes('mock')) {
-      setUser({ id: 'mock-user-id', email: 'developer@example.com' });
+      setUser({ id: 'mock-user-id', email: 'pepe@gmail.com' });
       setAuthLoading(false);
       return;
     }
@@ -683,7 +683,7 @@ export default function App() {
       if (estadoPlazo === 'amarillo') cercanoPlazo++;
     });
     return { fueraPlazo, cercanoPlazo };
-  }, [tareas, obtenerEstadoPlazo]);
+  }, [tareas]);
 
   // 1. Pantalla de advertencia si no está configurado Supabase
   if (!isConfigured) {
