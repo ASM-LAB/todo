@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.tareas (
     concepto TEXT NOT NULL,
     concepto_superior TEXT NOT NULL,
     prioridad TEXT NOT NULL CHECK (prioridad IN ('alta', 'media', 'baja')),
-    estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'en curso', 'rechazada', 'resuelta')),
+    estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'en curso', 'rechazada', 'resuelta', 'guardado')),
     fecha_alta TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     fecha_resolucion TIMESTAMPTZ,
     fecha_limite DATE
@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS public.tareas (
 -- NOTA DE MIGRACIÓN: Para bases de datos que ya existen, se pueden ejecutar las siguientes consultas en el Editor SQL de Supabase:
 -- ALTER TABLE public.tareas ADD COLUMN IF NOT EXISTS titulo TEXT NOT NULL DEFAULT 'Sin título';
 -- ALTER TABLE public.tareas ADD COLUMN IF NOT EXISTS fecha_limite DATE;
+-- ALTER TABLE public.tareas DROP CONSTRAINT IF EXISTS tareas_estado_check;
+-- ALTER TABLE public.tareas ADD CONSTRAINT tareas_estado_check CHECK (estado IN ('pendiente', 'en curso', 'rechazada', 'resuelta', 'guardado'));
 
 -- Indexar para mejorar el rendimiento de consultas por usuario
 CREATE INDEX IF NOT EXISTS tareas_user_id_idx ON public.tareas(user_id);

@@ -33,7 +33,7 @@ interface Tarea {
   concepto: string;
   concepto_superior: string;
   prioridad: 'alta' | 'media' | 'baja';
-  estado: 'pendiente' | 'en curso' | 'rechazada' | 'resuelta';
+  estado: 'pendiente' | 'en curso' | 'rechazada' | 'resuelta' | 'guardado';
   fecha_alta: string;
   fecha_resolucion: string | null;
   fecha_limite?: string | null;
@@ -48,7 +48,7 @@ const PRIORIDAD_VALORES = {
 
 // Obtener estado del plazo de una tarea (rojo: pasado, amarillo: <= 5 días, normal: de lo contrario)
 const obtenerEstadoPlazo = (fechaLimiteStr: string | null | undefined, estado: string) => {
-  if (!fechaLimiteStr || estado === 'resuelta') return 'normal';
+  if (!fechaLimiteStr || estado === 'resuelta' || estado === 'guardado') return 'normal';
 
   const limite = new Date(fechaLimiteStr);
   limite.setHours(0, 0, 0, 0);
@@ -102,7 +102,7 @@ export default function App() {
     concepto: '',
     concepto_superior: '',
     prioridad: 'media' as 'alta' | 'media' | 'baja',
-    estado: 'pendiente' as 'pendiente' | 'en curso' | 'rechazada' | 'resuelta',
+    estado: 'pendiente' as 'pendiente' | 'en curso' | 'rechazada' | 'resuelta' | 'guardado',
     fecha_limite: '',
   });
 
@@ -670,7 +670,8 @@ export default function App() {
     const enCurso = tareas.filter((t) => t.estado === 'en curso').length;
     const rechazadas = tareas.filter((t) => t.estado === 'rechazada').length;
     const resueltas = tareas.filter((t) => t.estado === 'resuelta').length;
-    return { totales, pendientes, enCurso, rechazadas, resueltas };
+    const guardados = tareas.filter((t) => t.estado === 'guardado').length;
+    return { totales, pendientes, enCurso, rechazadas, resueltas, guardados };
   }, [tareas]);
 
   // Contadores para filtros específicos de plazo
@@ -940,7 +941,7 @@ export default function App() {
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 space-y-6">
 
         {/* Panel de Estadísticas / Resumen */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs text-center flex flex-col justify-center">
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Totales</span>
             <span className="text-2xl font-bold text-gray-800 mt-1">{stats.totales}</span>
@@ -957,9 +958,13 @@ export default function App() {
             <span className="text-xs font-semibold text-red-600 uppercase tracking-wider">Rechazadas</span>
             <span className="text-2xl font-bold text-red-600 mt-1">{stats.rechazadas}</span>
           </div>
-          <div className="col-span-2 md:col-span-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs text-center flex flex-col justify-center">
-            <span className="text-xs font-semibold text-green-600 uppercase tracking-wider">Resueltas</span>
-            <span className="text-2xl font-bold text-green-600 mt-1">{stats.resueltas}</span>
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs text-center flex flex-col justify-center">
+            <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Resueltas</span>
+            <span className="text-2xl font-bold text-emerald-600 mt-1">{stats.resueltas}</span>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs text-center flex flex-col justify-center">
+            <span className="text-xs font-semibold text-lime-600 uppercase tracking-wider">Guardadas</span>
+            <span className="text-2xl font-bold text-lime-600 mt-1">{stats.guardados}</span>
           </div>
         </div>
 
@@ -1022,6 +1027,7 @@ export default function App() {
                 { id: 'en curso', label: 'En Curso', count: stats.enCurso },
                 { id: 'rechazada', label: 'Rechazadas', count: stats.rechazadas },
                 { id: 'resuelta', label: 'Resueltas', count: stats.resueltas },
+                { id: 'guardado', label: 'Guardadas', count: stats.guardados },
               ].map((filtro) => (
                 <button
                   key={filtro.id}
@@ -1169,6 +1175,7 @@ export default function App() {
                           'en curso': 'bg-indigo-50 text-indigo-700 border border-indigo-100',
                           rechazada: 'bg-rose-50 text-rose-700 border border-rose-100',
                           resuelta: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+                          guardado: 'bg-lime-50 text-lime-700 border border-lime-200',
                         }[tarea.estado];
 
                         const estadoPlazo = obtenerEstadoPlazo(tarea.fecha_limite, tarea.estado);
@@ -1261,6 +1268,7 @@ export default function App() {
                                   <option value="en curso">En Curso</option>
                                   <option value="rechazada">Rechazada</option>
                                   <option value="resuelta">Resuelta</option>
+                                  <option value="guardado">Guardado</option>
                                 </select>
                               </div>
 
@@ -1408,6 +1416,7 @@ export default function App() {
                     <option value="en curso">En Curso</option>
                     <option value="rechazada">Rechazada</option>
                     <option value="resuelta">Resuelta</option>
+                    <option value="guardado">Guardado</option>
                   </select>
                 </div>
               </div>
