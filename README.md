@@ -249,17 +249,29 @@ Puedes añadir la **Lista de Tareas** como un acceso directo o aplicación nativ
    npm install
    ```
 
-3. **Iniciar el servidor de desarrollo**:
+3. **Configurar Supabase**: copia `.env.example` a `.env.local` y sustituye los valores de ejemplo por la URL del proyecto y su clave publicable (`anon`/`publishable`):
+   ```bash
+   cp .env.example .env.local
+   ```
+   El archivo `.env.local` está excluido de Git; no lo subas al repositorio. La clave publicable se incluye en la aplicación del navegador, así que configura las políticas RLS en Supabase y nunca uses una clave `service_role` aquí.
+
+4. **Iniciar el servidor de desarrollo**:
    ```bash
    npm run dev
    ```
 
-4. **Compilar para producción**:
+5. **Compilar para producción**:
    ```bash
    npm run build
    ```
 
-5. **Desplegar en GitHub Pages**:
+6. **Configurar GitHub Pages**: en GitHub, ve a **Settings → Secrets and variables → Actions → Variables** y crea estas variables del repositorio con los mismos valores de Supabase:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+
+   El workflow de GitHub Actions las proporciona al paso de compilación antes de publicar en GitHub Pages. Vite incorpora las variables `VITE_*` en los archivos JavaScript del sitio, por lo que no son secretos en tiempo de ejecución: utiliza únicamente la clave publicable de Supabase y aplica RLS. No uses una clave `service_role`.
+
+7. **Desplegar en GitHub Pages**: el workflow publica automáticamente al hacer `push` a `main` (también puede ejecutarse manualmente desde la pestaña **Actions**). Para publicar manualmente desde el equipo local:
    ```bash
    npm run deploy
    ```
