@@ -718,10 +718,10 @@ export default function App() {
           <form onSubmit={handleSaveTempConfig} className="space-y-4">
             <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
               <span className="inline-block w-2 h-2 rounded-full bg-indigo-500"></span>
-              Paso 2: Introduce tus claves o crea un archivo .env
+              Paso 2: Introduce tus claves o crea un archivo .env.local
             </h3>
             <p className="text-xs text-gray-500">
-              Puedes crear un archivo <code className="bg-gray-100 px-1 py-0.5 rounded font-mono">.env</code> basado en <code className="bg-gray-100 px-1 py-0.5 rounded font-mono">.env.example</code> o, si lo prefieres para probar rápidamente, introduce tus claves temporales aquí mismo:
+              Puedes crear un archivo <code className="bg-gray-100 px-1 py-0.5 rounded font-mono">.env.local</code> basado en <code className="bg-gray-100 px-1 py-0.5 rounded font-mono">.env.example</code> o, si lo prefieres para probar rápidamente, introduce tus claves temporales aquí mismo:
             </p>
             <div>
               <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
